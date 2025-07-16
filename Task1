@@ -1,0 +1,201 @@
+import java.sql.*;
+import java.util.Scanner;
+public class OnlineReservationSystem {
+    public static class DBConnection {
+        private static final String URL = "jdbc:mysql://localhost:3306/reservation_system";
+        private static final String USER = "root";
+        private static final String PASSWORD = "";
+        public static Connection getConnection() {
+            Connection conn = null;
+            try {
+                Class.forName("com.mysql.cj.jdbc.Driver");
+                conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/reservation_system", "root", "");
+            } catch (ClassNotFoundException | SQLException e) {
+                System.out.println("❌ Error in getConnection():");
+                e.printStackTrace();
+            }
+            return conn;
+        }
+    }
+    public static class LoginForm {
+        public static boolean authenticate(String username, String password) {
+            boolean isValid = false;
+            try {
+                Connection conn = DBConnection.getConnection();
+                if (conn != null) {
+                    String sql = "SELECT * FROM users WHERE username = ? AND password = ?";
+                    PreparedStatement stmt = conn.prepareStatement(sql);
+                    stmt.setString(1, username);
+                    stmt.setString(2, password);
+                    ResultSet rs = stmt.executeQuery();
+                    isValid = rs.next();
+                    conn.close();
+                }
+            } catch (Exception e) {
+                System.out.println("❌ Error during authentication:");
+                e.printStackTrace();
+            }
+            return isValid;
+        }
+    }
+    public static class ReservationForm {
+        public static void makeReservation(Scanner scanner) {
+            System.out.println("=== Train Ticket Reservation ===");
+            System.out.print("Passenger Name: ");
+            String name = scanner.nextLine();
+            System.out.print("Train Number: ");
+            String trainNo = scanner.nextLine();
+            System.out.print("Date of Journey (YYYY-MM-DD): ");
+            String date_of_journey = scanner.nextLine();
+            System.out.print("Class (e.g., Sleeper/AC): ");
+            String classType = scanner.nextLine();
+            System.out.print("From Station: ");
+            String from_place = scanner.nextLine();
+            System.out.print("To Station: ");
+            String to_place = scanner.nextLine();
+            try {
+                Connection conn = DBConnection.getConnection();
+                if (conn != null) {
+                    String sql = "INSERT INTO reservations (name, train_no, date_of_journey, class_type, from_place, to_place) VALUES (?, ?, ?, ?, ?, ?)";
+                    PreparedStatement stmt = conn.prepareStatement(sql);
+                    stmt.setString(1, name);
+                    stmt.setString(2, trainNo);
+                    stmt.setString(3, date_of_journey);
+                    stmt.setString(4, classType);
+                    stmt.setString(5, from_place);
+                    stmt.setString(6, to_place);
+                    int rows = stmt.executeUpdate();
+                    if (rows > 0) {
+                        System.out.println("✅ Reservation successful!");
+                    } else {
+                        System.out.println("❌ Reservation failed.");
+                    }
+                    conn.close();
+                }
+            } catch (Exception e) {
+                System.out.println("❌ Error during reservation:");
+                e.printStackTrace();
+            }
+        }
+    }
+    public static class CancellationForm {
+        public static void cancellationForm(Scanner scanner) {
+            System.out.println("=== Cancel Reservation ===");
+            System.out.print("Enter Reservation ID to cancel: ");
+            while (!scanner.hasNextInt()) {
+                System.out.println("⚠️ Please enter a valid number.");
+                scanner.next();
+                System.out.print("Enter Reservation ID to cancel: ");
+            }
+            int id = scanner.nextInt();
+            scanner.nextLine();
+            try {
+                Connection conn = DBConnection.getConnection();
+                if (conn != null) {
+                    String sql = "DELETE FROM reservations WHERE id = ?";
+                    PreparedStatement stmt = conn.prepareStatement(sql);
+                    stmt.setInt(1, id);
+                    int rows = stmt.executeUpdate();
+
+                    if (rows > 0) {
+                        System.out.println("✅ Reservation with ID " + id + " cancelled successfully.");
+                    } else {
+                        System.out.println("⚠️ No reservation found with ID: " + id);
+                    }
+                    conn.close();
+                }
+            } catch (Exception e) {
+                System.out.println("❌ Error while cancelling reservation:");
+                e.printStackTrace();
+            }
+        }
+    }
+    public static class ViewReservations {
+        public static void viewAllReservations() {
+            System.out.println("=== All Reservations ===");
+            try {
+                Connection conn = DBConnection.getConnection();
+                if (conn != null) {
+                    String sql = "SELECT * FROM reservations";
+                    Statement stmt = conn.createStatement();
+                    ResultSet rs = stmt.executeQuery(sql);
+                    boolean hasData = false;
+                    while (rs.next()) {
+                        hasData = true;
+                        System.out.println("\nReservation ID: " + rs.getInt("id"));
+                        System.out.println("Name          : " + rs.getString("name"));
+                        System.out.println("Train Number  : " + rs.getString("train_no"));
+                        System.out.println("Date          : " + rs.getString("date_of_journey"));
+                        System.out.println("Class         : " + rs.getString("class_type"));
+                        System.out.println("From          : " + rs.getString("from_place"));
+                        System.out.println("To            : " + rs.getString("to_place"));
+                        System.out.println("----------------------------------------");
+                    }
+                    if (!hasData) {
+                        System.out.println("⚠️ No reservations found.");
+                    }
+                    conn.close();
+                }
+            } catch (Exception e) {
+                System.out.println("❌ Error while fetching reservations:");
+                e.printStackTrace();
+            }
+        }
+    }
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("=== Online Reservation System Login ===");
+        System.out.print("Username: ");
+        String username = scanner.nextLine();
+        System.out.print("Password: ");
+        String password = scanner.nextLine();
+
+        if (LoginForm.authenticate(username, password)) {
+            System.out.println("✅ Login successful!");
+            showMenu(username, scanner);
+        } else {
+            System.out.println("❌ Login failed. Exiting...");
+        }
+        scanner.close();
+    }
+    public static void showMenu(String username, Scanner scanner) {
+        int choice;
+        System.out.println("\n=== Welcome to Online Reservation System ===");
+        System.out.println("Logged in as: " + username);
+
+        do {
+            System.out.println("\n--- Main Menu ---");
+            System.out.println("1. Make a Reservation");
+            System.out.println("2. Cancel a Reservation");
+            System.out.println("3. View All Reservations");
+            System.out.println("4. Exit");
+            System.out.print("Enter your choice: ");
+
+            while (!scanner.hasNextInt()) {
+                System.out.println("⚠️ Please enter a valid number!");
+                scanner.next();
+                System.out.print("Enter your choice: ");
+            }
+
+            choice = scanner.nextInt();
+            scanner.nextLine();
+
+            switch (choice) {
+                case 1:
+                    ReservationForm.makeReservation(scanner);
+                    break;
+                case 2:
+                    CancellationForm.cancellationForm(scanner);
+                    break;
+                case 3:
+                    ViewReservations.viewAllReservations();
+                    break;
+                case 4:
+                    System.out.println("👋 Exiting the system. Thank you!");
+                    break;
+                default:
+                    System.out.println("⚠️ Invalid choice. Try again.");
+            }
+        } while (choice != 4);
+    }
+}
