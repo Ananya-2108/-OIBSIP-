@@ -1,0 +1,175 @@
+import java.sql.*;
+import java.util.*;
+class DBConnection {
+    private static final String URL = "jdbc:mysql://localhost:3306/online_exam";
+    private static final String USER = "root";
+    private static final String PASSWORD = "";
+    public static Connection getConnection() {
+        Connection conn = null;
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            conn = DriverManager.getConnection(URL, USER, PASSWORD);
+        } catch (Exception e) {
+            System.out.println("Connection Error: " + e.getMessage());
+        }
+        return conn;
+    }
+}
+class User {
+    Scanner sc = new Scanner(System.in);
+    public void register() {
+        try (Connection conn = DBConnection.getConnection()) {
+            System.out.print("Enter name: ");
+            String name = sc.nextLine();
+            System.out.print("Enter username: ");
+            String username = sc.nextLine();
+            System.out.print("Enter password: ");
+            String password = sc.nextLine();
+            String sql = "INSERT INTO users (username, password, name) VALUES (?, ?, ?)";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, username);
+            ps.setString(2, password);
+            ps.setString(3, name);
+            int rows = ps.executeUpdate();
+            if (rows > 0) System.out.println("Registered successfully!");
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+    public boolean login(String[] loggedInUser) {
+        try (Connection conn = DBConnection.getConnection()) {
+            System.out.print("Username: ");
+            String username = sc.nextLine();
+            System.out.print("Password: ");
+            String password = sc.nextLine();
+            String sql = "SELECT * FROM users WHERE username=? AND password=?";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, username);
+            ps.setString(2, password);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                loggedInUser[0] = rs.getString("username");
+                System.out.println("Login Successful. Welcome, " + rs.getString("name"));
+                return true;
+            } else {
+                System.out.println("Invalid Credentials!");
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        return false;
+    }
+    public void updateProfile(String username) {
+        try (Connection conn = DBConnection.getConnection()) {
+            System.out.print("Enter new name: ");
+            String name = sc.nextLine();
+            System.out.print("Enter new password: ");
+            String password = sc.nextLine();
+            String sql = "UPDATE users SET name=?, password=? WHERE username=?";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, name);
+            ps.setString(2, password);
+            ps.setString(3, username);
+            int rows = ps.executeUpdate();
+            if (rows > 0) System.out.println("Profile Updated!");
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+}
+class Question {
+    int id;
+    String question, optionA, optionB, optionC, optionD;
+    char correctOption;
+}
+class TimerThread implements Runnable {
+    int seconds;
+    public volatile boolean timeUp = false;
+    public TimerThread(int seconds) {
+        this.seconds = seconds;
+    }
+    public void run() {
+        try {
+            for (int i = seconds; i >= 0; i--) {
+                Thread.sleep(1000);
+                if (timeUp) return;
+            }
+            timeUp = true;
+            System.out.println("\n⏰ Time is up! Auto-submitting...");
+        } catch (InterruptedException e) {
+            System.out.println("Timer interrupted.");
+        }
+    }
+}
+class Exam {
+    Scanner sc = new Scanner(System.in);
+    int score = 0;
+    public void startExam() {
+        List<Question> questions = new ArrayList<>();
+        try (Connection conn = DBConnection.getConnection()) {
+            String sql = "SELECT * FROM questions";
+            ResultSet rs = conn.createStatement().executeQuery(sql);
+            while (rs.next()) {
+                Question q = new Question();
+                q.id = rs.getInt("id");
+                q.question = rs.getString("question");
+                q.optionA = rs.getString("optionA");
+                q.optionB = rs.getString("optionB");
+                q.optionC = rs.getString("optionC");
+                q.optionD = rs.getString("optionD");
+                q.correctOption = rs.getString("correctOption").charAt(0);
+                questions.add(q);
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading questions: " + e.getMessage());
+        }
+        TimerThread timer = new TimerThread(questions.size() * 30);
+        Thread t = new Thread(timer);
+        t.start();
+        for (Question q : questions) {
+            if (timer.timeUp) break;
+            System.out.println("\n" + q.question);
+            System.out.println("A. " + q.optionA);
+            System.out.println("B. " + q.optionB);
+            System.out.println("C. " + q.optionC);
+            System.out.println("D. " + q.optionD);
+            System.out.print("Your answer: ");
+            char ans = sc.nextLine().toUpperCase().charAt(0);
+            if (ans == q.correctOption) score++;
+        }
+        timer.timeUp = true;
+        System.out.println("\nExam Ended! Your Score: " + score + "/" + questions.size());
+    }
+}
+public class OnlineExamApp {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        User user = new User();
+        String[] currentUser = new String[1];
+        while (true) {
+            System.out.println("\n--- Online Examination ---");
+            System.out.println("1. Register");
+            System.out.println("2. Login");
+            System.out.println("3. Exit");
+            System.out.print("Choice: ");
+            int choice = sc.nextInt();sc.nextLine();
+            if (choice == 1) {
+                user.register();
+            } else if (choice == 2) {
+                if (user.login(currentUser)) {
+                    boolean session = true;
+                    while (session) {
+                        System.out.println("\n1. Start Exam\n2. Update Profile\n3. Logout");
+                        System.out.print("Choice: ");
+                        int ch = sc.nextInt(); sc.nextLine();
+                        if (ch == 1) new Exam().startExam();
+                        else if (ch == 2) user.updateProfile(currentUser[0]);
+                        else session = false;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+}
